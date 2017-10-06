@@ -1,0 +1,91 @@
+// MODIFIED FILE: mojo_top.luc from Embedded Micro Mojo IDE
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,       // AVR RX buffer full
+    input sliceclock // input from external clock signal, modification
+  ) {
+  
+  sig rst;                  // reset signal
+  sig actv1; // active signal for cpu1, there are two instances of the cpu.luc code, one for each job
+             //  there is essentially a context switch without the need for a memory manager,
+             //  each job essentially has dedicated hardware but only one can be active at a time
+  sig actv2; // active signal for cpu2, modifications
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    
+    .rst(rst) {
+      .active(actv1) {
+        cpu job1;        // cpu instance, represents a job
+      }
+      .active(actv2) {
+        cpu job2; // other cpu instance, represents other job, modifications
+      }
+      dff led_reg1[8]; // storage for LED value
+      dff led_reg2[8]; // not physically connected to LED's, just used to store data which
+                       //  would have been written to them, but aren't due to modifications
+    }
+  }
+  
+  always {
+    reset_cond.in = ~rst_n;   // input raw inverted reset signal
+    rst = reset_cond.out;     // conditioned reset
+    
+    spi_miso = bz;            // not using SPI
+    spi_channel = bzzzz;      // not using flags
+    avr_rx = bz;              // not using serial port
+    
+    job1.din = 8hxx;           // default to don't care
+    job2.din = 8hxx;           // default to don't care
+    
+    led = 8x{b0}; // initializations of LED's to off
+    actv1 = b0;   //  and job active states to off
+    actv2 = b0;
+    
+    if (!job1.complete || !job2.complete) {
+      case (sliceclock) { // basic round robin scheduler, modification
+        0:
+          if (job1.complete) { // if this job is complete and the other is not, don't context switch
+            led[0] = b1; // first LED lights when job1 is complete
+          } else {
+            actv2 = b0; // turn off second job
+            actv1 = b1; // turn on first job
+            // if cpu uses address 128
+            if (job1.address == 128) { // these nested if statements are original
+              if (job1.write)
+                led_reg1.d = job1.dout; // update the LED value
+              if (job1.read)
+                job1.din = led_reg1.q;  // let the CPU read the LED value
+            }
+          }
+        1:
+          if (job2.complete) { // if this job is complete and the other is not, don't context switch
+            led[1] = b1; // second LED lights when job2 is complete
+          } else {
+            actv1 = b0; // turn off first job
+            actv2 = b1; // turn on second job
+            if (job2.address == 128) {
+              if (job2.write)
+                led_reg2.d = job2.dout; // update the LED value
+              if (job2.read)
+                job2.din = led_reg2.q;  // let the CPU read the LED value
+            }
+          }
+      }
+    } else {
+      led = 8x{b1}; // all LED's light when both jobs are finished
+    }
+  }
+}

@@ -1,0 +1,3 @@
+// ORIGINAL CONSTRAINTS FILE: sliceclock.ucf 
+NET "sliceclock" LOC = P1 | IOSTANDARD = LVTTL; 
+// plug the external circuit wire into pin 1 on the development board
