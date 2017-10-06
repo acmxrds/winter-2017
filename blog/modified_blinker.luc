@@ -1,0 +1,22 @@
+// MODIFIED FILE: blinker.luc from Embedded Micro Mojo IDE
+
+module blinker (
+    input clk,    // clock
+    input rst,    // reset
+    output blink,  // output to LED
+    input pinIn // input for external astable multivibrator circuit
+  ) {
+  
+  .clk(clk), .rst(rst) {
+  }
+  
+  always {
+    blink = bx;
+    case (pinIn) {
+    0:
+        blink = b0;
+    1:
+        blink = b1;
+    }
+  }
+}
